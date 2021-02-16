@@ -194,13 +194,13 @@ unsigned int capacity_margin				= 1280;
 
 /* Migration margins */
 unsigned int sysctl_sched_capacity_margin_up[MAX_MARGIN_LEVELS] = {
-			[0 ... MAX_MARGIN_LEVELS-1] = 1078}; /* ~5% margin */
+			[0 ... MAX_MARGIN_LEVELS-1] = 1280}; /* ~20% margin */
 unsigned int sysctl_sched_capacity_margin_down[MAX_MARGIN_LEVELS] = {
-			[0 ... MAX_MARGIN_LEVELS-1] = 1205}; /* ~15% margin */
+			[0 ... MAX_MARGIN_LEVELS-1] = 1575}; /* ~35% margin */
 unsigned int sched_capacity_margin_up[NR_CPUS] = {
-			[0 ... NR_CPUS-1] = 1078}; /* ~5% margin */
+			[0 ... NR_CPUS-1] = 1280}; /* ~20% margin */
 unsigned int sched_capacity_margin_down[NR_CPUS] = {
-			[0 ... NR_CPUS-1] = 1205}; /* ~15% margin */
+			[0 ... NR_CPUS-1] = 1575}; /* ~35% margin */
 
 /* 1ms default for 20ms window size scaled to 1024 */
 unsigned int sysctl_sched_min_task_util_for_boost = 51;
@@ -7812,12 +7812,6 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 					continue;
 
 				/*
-				 * Skip searching for active CPU for tasks have
-				 * high priority & prefer_high_cap.
-				 */
-				if (boosted && p->prio <= DEFAULT_PRIO)
-					continue;
-				/*
 				 * Case A.2: Target ACTIVE CPU
 				 * Favor CPUs with max spare capacity.
 				 */
@@ -8050,10 +8044,8 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 		: best_idle_cpu;
 
 	if (target_cpu == -1 && most_spare_cap_cpu != -1 &&
-	    /* ensure we use active cpu for active migration */
-	    !(p->state == TASK_RUNNING && !idle_cpu(most_spare_cap_cpu)) &&
-		/* do not pick an overutilized most_spare_cap_cpu */
-		!cpu_overutilized(most_spare_cap_cpu))
+		/* ensure we use active cpu for active migration */
+		!(p->state == TASK_RUNNING && !idle_cpu(most_spare_cap_cpu)))
 		target_cpu = most_spare_cap_cpu;
 
 	trace_sched_find_best_target(p, prefer_idle, min_util, cpu,
