@@ -34,7 +34,10 @@ struct msm_commit {
 	uint32_t crtc_mask;
 	uint32_t plane_mask;
 	bool nonblock;
-	struct kthread_work commit_work;
+	union {
+		struct kthread_work commit_work;
+		struct work_struct clean_work;
+	};
 };
 
 static BLOCKING_NOTIFIER_HEAD(msm_drm_notifier_list);
@@ -579,9 +582,9 @@ static void msm_atomic_helper_commit_modeset_enables(struct drm_device *dev,
 	SDE_ATRACE_END("msm_enable");
 }
 
-static void complete_commit_cleanup(struct kthread_work *work)
+static void complete_commit_cleanup(struct work_struct *work)
 {
-	struct msm_commit *c = container_of(work, typeof(*c), commit_work);
+	struct msm_commit *c = container_of(work, typeof(*c), clean_work);
 	struct drm_atomic_state *state = c->state;
 
 	drm_atomic_state_put(state);
@@ -636,9 +639,6 @@ static void complete_commit(struct msm_commit *c)
 static void _msm_drm_commit_work_cb(struct kthread_work *work)
 {
 	struct msm_commit *c = container_of(work, typeof(*c), commit_work);
-	struct drm_atomic_state *state = c->state;
-	struct drm_device *dev = state->dev;
-	struct msm_drm_private *priv = dev->dev_private;
 	struct pm_qos_request req = {
 		.type = PM_QOS_REQ_AFFINE_CORES,
 		.cpus_affine = ATOMIC_INIT(BIT(raw_smp_processor_id()))
@@ -656,11 +656,11 @@ static void _msm_drm_commit_work_cb(struct kthread_work *work)
 	pm_qos_remove_request(&req);
 
 	if (c->nonblock) {
-		/* Offload the cleanup onto little CPUs */
-		kthread_init_work(&c->commit_work, complete_commit_cleanup);
-		kthread_queue_work(&priv->clean_thread.worker, &c->commit_work);
+		/* Offload the cleanup onto little CPUs (an unbound wq) */
+		INIT_WORK(&c->clean_work, complete_commit_cleanup);
+		queue_work(system_unbound_wq, &c->clean_work);
 	} else {
-		complete_commit_cleanup(&c->commit_work);
+		complete_commit_cleanup(&c->clean_work);
 	}
 }
 
@@ -732,7 +732,7 @@ static void msm_atomic_commit_dispatch(struct drm_device *dev,
 		 */
 		DRM_ERROR("failed to dispatch commit to any CRTC\n");
 		complete_commit(commit);
-		complete_commit_cleanup(&commit->commit_work);
+		complete_commit_cleanup(&commit->clean_work);
 	} else if (!nonblock) {
 		kthread_flush_work(&commit->commit_work);
 	}
