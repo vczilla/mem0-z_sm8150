@@ -5,10 +5,21 @@ Type: Stable
 Device: OnePlus 7/T/Pro
 Compiler: Proton Clang 13.0.0
 Branch: master
-Build Number: 1.9
+Build Number: 2.0.1
 ```
 ## Changelog
 ```
+-2.0:
+-Kernel upstreamed to latest 4.14.224
+-Improve gaming performance and battery usage by speeding up PID map reads
+-Increase worker thread priority for some kgsl events
+-Eliminate CONFIG_MODULES limitation from JIT
+-Drop CPU_INPUT_BOOST and DEVFREQ_INPUT_BOOST values
+-Switch back to 12ms PELT half life
+-1.9:
+-Scheduler improvements
+*Disable RUNTIME_SHARE and TTWU_QUEUE scheduler features
+-msm/kgsl code cleanup
 -1.8:
 -Upstream kernel to 4.14.222
 -Strip down Qualcomm's ufs pm_qos implementation and replace with much simpler Sultan's solution
@@ -17,9 +28,4 @@ Build Number: 1.9
 -Remove IRQF_NO_SUSPEND flag from smp2p driver
 -Tentatively bring back LTO builds
 -Integrate OTA updates in Franco's Karamel Manager (link for the json: https://raw.githubusercontent.com/nem0-z/android_kernel_oneplus_sm8150/master/ota/update.json)
--1.9:
--Scheduler improvements
-*Disable RUNTIME_SHARE and TTWU_QUEUE scheduler features
--msm/kgsl code cleanup
 
-```
