@@ -235,6 +235,12 @@ static inline int task_has_dl_policy(struct task_struct *p)
 	return dl_policy(p->policy);
 }
 
+static inline void update_avg(u64 *avg, u64 sample)
+{
+	s64 diff = sample - *avg;
+	*avg += diff / 8;
+}
+
 /*
  * Tells if entity @a should preempt entity @b.
  */
@@ -1250,7 +1256,7 @@ extern void sched_ttwu_pending(void);
 
 /*
  * The domain tree (rq->sd) is protected by RCU's quiescent state transition.
- * See detach_destroy_domains: synchronize_sched for details.
+ * See destroy_sched_domains: call_rcu for details.
  *
  * The domain tree of any CPU may only be accessed from within
  * preempt-disabled sections.
@@ -1383,11 +1389,12 @@ static inline void unregister_sched_domain_sysctl(void)
 }
 #endif
 
-#else
+extern void flush_smp_call_function_from_idle(void);
 
+#else /* !CONFIG_SMP: */
+static inline void flush_smp_call_function_from_idle(void) { }
 static inline void sched_ttwu_pending(void) { }
-
-#endif /* CONFIG_SMP */
+#endif
 
 #include "stats.h"
 #include "autogroup.h"
@@ -1565,53 +1572,13 @@ static inline int task_on_rq_migrating(struct task_struct *p)
 # define finish_arch_post_lock_switch()	do { } while (0)
 #endif
 
-static inline void prepare_lock_switch(struct rq *rq, struct task_struct *next)
-{
-#ifdef CONFIG_SMP
-	/*
-	 * We can optimise this out completely for !SMP, because the
-	 * SMP rebalancing from interrupt is the only thing that cares
-	 * here.
-	 */
-	next->on_cpu = 1;
-#endif
-}
-
-static inline void finish_lock_switch(struct rq *rq, struct task_struct *prev)
-{
-#ifdef CONFIG_SMP
-	/*
-	 * After ->on_cpu is cleared, the task can be moved to a different CPU.
-	 * We must ensure this doesn't happen until the switch is completely
-	 * finished.
-	 *
-	 * In particular, the load of prev->state in finish_task_switch() must
-	 * happen before this.
-	 *
-	 * Pairs with the smp_cond_load_acquire() in try_to_wake_up().
-	 */
-	smp_store_release(&prev->on_cpu, 0);
-#endif
-#ifdef CONFIG_DEBUG_SPINLOCK
-	/* this is a valid case when another task releases the spinlock */
-	rq->lock.owner = current;
-#endif
-	/*
-	 * If we are tracking spinlock dependencies then we have to
-	 * fix up the runqueue lock - which gets 'carried over' from
-	 * prev into current:
-	 */
-	spin_acquire(&rq->lock.dep_map, 0, 0, _THIS_IP_);
-
-	raw_spin_unlock_irq(&rq->lock);
-}
-
 /*
  * wake flags
  */
 #define WF_SYNC		0x01		/* waker goes to sleep after wakeup */
 #define WF_FORK		0x02		/* child wakeup after fork */
-#define WF_MIGRATED	0x4		/* internal use, task got migrated */
+#define WF_MIGRATED	0x04		/* internal use, task got migrated */
+#define WF_ON_RQ	0x08		/* wakee is on_rq */
 
 /*
  * To aid in avoiding the subversion of "niceness" due to uneven distribution
